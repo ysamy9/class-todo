@@ -167,3 +167,4 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 button.danger { background: var(--danger); color: #fff; }
 .nav { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+   textarea { font: inherit; width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); resize: vertical; }

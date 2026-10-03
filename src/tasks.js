@@ -37,7 +37,8 @@ export async function mountTasks(user, perms) {
     <details class="add" id="addbox">
       <summary>+ New task</summary>
       <form id="add">
-        <input id="description" placeholder="What needs to be done?" required maxlength="200" />
+        <input id="title" placeholder="Task name" required maxlength="100" />
+        <textarea id="description" placeholder="Details (optional, shown when you open the task)" rows="3" maxlength="1000"></textarea>
         <div class="row">
           <select id="course" required></select>
           <input id="due" type="date" />
@@ -72,7 +73,7 @@ export async function mountTasks(user, perms) {
     if (!$('count')) return // user switched tabs; this view is gone
     const [t, s] = await Promise.all([
       supabase.from('tasks')
-        .select('id,course_id,description,due,created_at,courses(code,name),profiles(display_name)'),
+        .select('id,course_id,title,description,due,created_at,courses(code,name),profiles(display_name)'),
       supabase.from('task_status').select('task_id,done,done_at,hidden'),
     ])
     if (t.error || s.error) return console.error(t.error || s.error)
@@ -99,8 +100,9 @@ export async function mountTasks(user, perms) {
     dlg.innerHTML = `
       <div class="dlg-body">
         <span class="subject" style="--h:${hue(code)}">${esc(code)}</span>
-        <h3>${esc(task.courses?.name ?? 'Unknown course')}</h3>
-        <p class="dlg-desc">${esc(task.description)}</p>
+        <h3>${esc(task.title)}</h3>
+        <p class="meta">${esc(task.courses?.name ?? 'Unknown course')}</p>
+        ${task.description ? `<p class="dlg-desc">${esc(task.description)}</p>` : '<p class="meta">No extra details.</p>'}
         <dl class="dlg-meta">
           <dt>Due</dt><dd>${info ? `${esc(task.due)} · ${esc(info.text)}` : 'No due date'}</dd>
           <dt>Posted by</dt><dd>${esc(task.profiles?.display_name ?? '?')}</dd>
@@ -123,7 +125,8 @@ export async function mountTasks(user, perms) {
     dlg.innerHTML = `
       <form class="dlg-body" id="edit">
         <h3>Edit task</h3>
-        <input id="e-desc" required maxlength="200" />
+        <input id="e-title" required maxlength="100" placeholder="Task name" />
+        <textarea id="e-desc" rows="4" maxlength="1000" placeholder="Details (optional)"></textarea>
         <div class="row">
           <select id="e-course">${courses.map((c) =>
             `<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`).join('')}</select>
@@ -135,7 +138,8 @@ export async function mountTasks(user, perms) {
           <button type="button" id="e-cancel" class="ghost">Cancel</button>
         </div>
       </form>`
-    $('e-desc').value = task.description
+    $('e-title').value = task.title
+    $('e-desc').value = task.description ?? ''
     $('e-course').value = task.course_id
     $('e-due').value = task.due ?? ''
     $('e-cancel').onclick = () => showDetails({ task })
@@ -145,7 +149,8 @@ export async function mountTasks(user, perms) {
       // .select() so we can tell when RLS silently blocked the update (0 rows)
       const { data, error } = await supabase.from('tasks')
         .update({
-          description: $('e-desc').value.trim(),
+          title: $('e-title').value.trim(),
+          description: $('e-desc').value.trim() || null,
           course_id: $('e-course').value,
           due: $('e-due').value || null,
         })
@@ -195,7 +200,7 @@ export async function mountTasks(user, perms) {
 
     const desc = document.createElement('div')
     desc.className = 'desc'
-    desc.textContent = task.description
+    desc.textContent = task.title
 
     const parts = []
     if (task.due) {
@@ -278,7 +283,8 @@ export async function mountTasks(user, perms) {
       $('addbtn').disabled = true
       const { error } = await supabase.from('tasks').insert({
         course_id: $('course').value,
-        description: $('description').value.trim(),
+        title: $('title').value.trim(),
+        description: $('description').value.trim() || null,
         due: $('due').value || null,
       })
       $('addbtn').disabled = false
