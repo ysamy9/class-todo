@@ -1,5 +1,6 @@
 import './style.css'
 import { supabase } from './supabase'
+import { mountTasks } from './tasks'
 
 const app = document.querySelector('#app')
 const $ = (id) => document.getElementById(id)
@@ -41,9 +42,10 @@ function showAuth() {
 async function showApp(user) {
   const { data: profile } = await supabase
     .from('profiles').select('display_name').eq('user_id', user.id).maybeSingle()
-  app.innerHTML = `<h1 id="hi"></h1><button id="logout">Log out</button>`
+  app.innerHTML = `<h1 id="hi"></h1><button id="logout">Log out</button><div id="tasks"></div>`
   $('hi').textContent = `Hi, ${profile?.display_name ?? ''}`
   $('logout').onclick = () => supabase.auth.signOut()
+  mountTasks(user)
 }
 
 async function render(session) {
