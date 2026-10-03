@@ -1,12 +1,12 @@
 import { supabase } from './supabase'
 
-// Edit this list to match your real courses
-const SUBJECTS = ['Waves', 'Comm theory II', 'Logic II', 'Electronics II', 'Power I','Network',]
-
 const $ = (id) => document.getElementById(id)
 let channel
 
-// Same subject name always gives the same color
+const esc = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+// Same course code always gives the same color
 const hue = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)
 
 // Whole days from today until a due date (negative = overdue)
@@ -24,37 +24,55 @@ function dueInfo(due) {
   return { text: `Due ${due}`, cls: diff <= 3 ? 'soon' : '' }
 }
 
-export async function mountTasks(user) {
+export async function mountTasks(user, perms) {
+  // perms = { all: bool, courses: Set of course ids this user may post in }
+  const can = (courseId) => perms.all || perms.courses.has(courseId)
+  const canAdd = perms.all || perms.courses.size > 0
   $('tasks').innerHTML = `
     <section class="summary">
       <div class="summary-row"><strong id="count"></strong><span id="pct"></span></div>
       <div class="bar"><i id="fill"></i></div>
     </section>
+    ${canAdd ? `
     <details class="add" id="addbox">
       <summary>+ New task</summary>
       <form id="add">
         <input id="description" placeholder="What needs to be done?" required maxlength="200" />
         <div class="row">
-          <select id="subject">${SUBJECTS.map((s) => `<option>${s}</option>`).join('')}</select>
+          <select id="course" required></select>
           <input id="due" type="date" />
         </div>
-        <label class="check"><input id="global" type="checkbox" /> Post to everyone</label>
         <button id="addbtn">Add task</button>
       </form>
-    </details>
+    </details>` : ''}
     <h2>Tasks</h2>
     <div class="chips" id="chips"></div>
     <ul id="list"></ul>
-    <p class="empty" id="empty" hidden></p>`
+    <p class="empty" id="empty" hidden></p>
+    <dialog id="dlg"></dialog>`
 
   let rows = []
-  const selected = new Set() // subjects ticked; empty means "all subjects"
+  let courses = [] // only loaded for admins (task form + edit form)
+  const selected = new Set() // course codes ticked; empty means "all"
   let weekOnly = false
+  const dlg = $('dlg')
+
+  dlg.onclick = (e) => { if (e.target === dlg) dlg.close() } // click backdrop to close
+
+  async function loadCourses() {
+    const { data, error } = await supabase.from('courses').select('id,code,name').order('code')
+    if (error) return console.error(error)
+    courses = data.filter((c) => can(c.id))
+    $('course').innerHTML = courses
+      .map((c) => `<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`)
+      .join('')
+  }
 
   async function load() {
+    if (!$('count')) return // user switched tabs; this view is gone
     const [t, s] = await Promise.all([
       supabase.from('tasks')
-        .select('id,subject,description,due,is_global,created_at,profiles(display_name)'),
+        .select('id,course_id,description,due,created_at,courses(code,name),profiles(display_name)'),
       supabase.from('task_status').select('task_id,done,done_at,hidden'),
     ])
     if (t.error || s.error) return console.error(t.error || s.error)
@@ -74,7 +92,88 @@ export async function mountTasks(user) {
     render()
   }
 
-  function card({ task, st }) {
+  // ---------- details / edit / delete ----------
+  function showDetails({ task }) {
+    const code = task.courses?.code ?? '?'
+    const info = task.due ? dueInfo(task.due) : null
+    dlg.innerHTML = `
+      <div class="dlg-body">
+        <span class="subject" style="--h:${hue(code)}">${esc(code)}</span>
+        <h3>${esc(task.courses?.name ?? 'Unknown course')}</h3>
+        <p class="dlg-desc">${esc(task.description)}</p>
+        <dl class="dlg-meta">
+          <dt>Due</dt><dd>${info ? `${esc(task.due)} · ${esc(info.text)}` : 'No due date'}</dd>
+          <dt>Posted by</dt><dd>${esc(task.profiles?.display_name ?? '?')}</dd>
+          <dt>Posted</dt><dd>${new Date(task.created_at).toLocaleDateString()}</dd>
+        </dl>
+        <div class="dlg-actions">
+          ${can(task.course_id) ? '<button id="d-edit">Edit</button><button id="d-del" class="danger">Delete</button>' : ''}
+          <button id="d-close" class="ghost">Close</button>
+        </div>
+      </div>`
+    $('d-close').onclick = () => dlg.close()
+    if (can(task.course_id)) {
+      $('d-edit').onclick = () => showEdit(task)
+      $('d-del').onclick = () => removeTask(task)
+    }
+    if (!dlg.open) dlg.showModal()
+  }
+
+  function showEdit(task) {
+    dlg.innerHTML = `
+      <form class="dlg-body" id="edit">
+        <h3>Edit task</h3>
+        <input id="e-desc" required maxlength="200" />
+        <div class="row">
+          <select id="e-course">${courses.map((c) =>
+            `<option value="${c.id}">${esc(c.code)} — ${esc(c.name)}</option>`).join('')}</select>
+          <input id="e-due" type="date" />
+        </div>
+        <p class="msg" id="e-msg"></p>
+        <div class="dlg-actions">
+          <button id="e-save">Save</button>
+          <button type="button" id="e-cancel" class="ghost">Cancel</button>
+        </div>
+      </form>`
+    $('e-desc').value = task.description
+    $('e-course').value = task.course_id
+    $('e-due').value = task.due ?? ''
+    $('e-cancel').onclick = () => showDetails({ task })
+    $('edit').onsubmit = async (e) => {
+      e.preventDefault()
+      $('e-save').disabled = true
+      // .select() so we can tell when RLS silently blocked the update (0 rows)
+      const { data, error } = await supabase.from('tasks')
+        .update({
+          description: $('e-desc').value.trim(),
+          course_id: $('e-course').value,
+          due: $('e-due').value || null,
+        })
+        .eq('id', task.id)
+        .select('id')
+      if (error || !data?.length) {
+        $('e-msg').textContent = error?.message ?? 'You don\'t have permission for this course'
+        $('e-save').disabled = false
+        return
+      }
+      dlg.close()
+      load()
+    }
+  }
+
+  async function removeTask(task) {
+    if (!confirm('Delete this task for everyone?')) return
+    const { data, error } = await supabase.from('tasks').delete().eq('id', task.id).select('id')
+    if (error || !data?.length) return alert(error?.message ?? 'You don\'t have permission for this course')
+    dlg.close()
+    load()
+  }
+
+  // ---------- list ----------
+  function card(row) {
+    const { task, st } = row
+    const code = task.courses?.code ?? '?'
+
     const box = document.createElement('input')
     box.type = 'checkbox'
     box.checked = !!st?.done
@@ -91,8 +190,8 @@ export async function mountTasks(user) {
 
     const label = document.createElement('strong')
     label.className = 'subject'
-    label.style.setProperty('--h', hue(task.subject))
-    label.textContent = task.subject
+    label.style.setProperty('--h', hue(code))
+    label.textContent = code
 
     const desc = document.createElement('div')
     desc.className = 'desc'
@@ -106,7 +205,6 @@ export async function mountTasks(user) {
       span.textContent = info.text
       parts.push(span)
     }
-    if (task.is_global) parts.push('For everyone')
     parts.push(`by ${task.profiles?.display_name ?? '?'}`)
 
     const meta = document.createElement('div')
@@ -116,6 +214,7 @@ export async function mountTasks(user) {
     const body = document.createElement('div')
     body.className = 'body'
     body.append(label, desc, meta)
+    body.onclick = () => showDetails(row)
 
     const li = document.createElement('li')
     if (st?.done) li.className = 'done'
@@ -143,18 +242,18 @@ export async function mountTasks(user) {
     $('pct').textContent = total ? `${pct}% done` : 'Nothing yet'
     $('fill').style.width = `${pct}%`
 
-    const subjects = [...new Set(rows.map((r) => r.task.subject))]
-    for (const s of [...selected]) if (!subjects.includes(s)) selected.delete(s)
+    const codes = [...new Set(rows.map((r) => r.task.courses?.code ?? '?'))].sort()
+    for (const s of [...selected]) if (!codes.includes(s)) selected.delete(s)
 
     $('chips').replaceChildren(
       chip('Due this week', weekOnly, (v) => (weekOnly = v)),
-      ...subjects.map((s) =>
+      ...codes.map((s) =>
         chip(s, selected.has(s), (v) => (v ? selected.add(s) : selected.delete(s)))
       )
     )
 
     const shown = rows.filter(({ task }) => {
-      if (selected.size && !selected.has(task.subject)) return false
+      if (selected.size && !selected.has(task.courses?.code ?? '?')) return false
       if (weekOnly) {
         if (!task.due) return false
         const d = daysUntil(task.due)
@@ -167,23 +266,27 @@ export async function mountTasks(user) {
     $('empty').hidden = shown.length > 0
     $('empty').textContent = total
       ? 'Nothing matches these filters.'
-      : 'No tasks yet. Add the first one above.'
+      : canAdd
+        ? 'No tasks yet. Add the first one above.'
+        : 'No tasks yet. Enroll in your courses from the Courses tab.'
   }
 
-  $('add').onsubmit = async (e) => {
-    e.preventDefault()
-    $('addbtn').disabled = true
-    const { error } = await supabase.from('tasks').insert({
-      subject: $('subject').value,
-      description: $('description').value.trim(),
-      due: $('due').value || null,
-      is_global: $('global').checked,
-    })
-    $('addbtn').disabled = false
-    if (error) return alert(error.message)
-    e.target.reset()
-    $('addbox').open = false
-    load()
+  if (canAdd) {
+    await loadCourses()
+    $('add').onsubmit = async (e) => {
+      e.preventDefault()
+      $('addbtn').disabled = true
+      const { error } = await supabase.from('tasks').insert({
+        course_id: $('course').value,
+        description: $('description').value.trim(),
+        due: $('due').value || null,
+      })
+      $('addbtn').disabled = false
+      if (error) return alert(error.message)
+      e.target.reset()
+      $('addbox').open = false
+      load()
+    }
   }
 
   if (channel) supabase.removeChannel(channel)

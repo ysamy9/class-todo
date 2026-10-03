@@ -1,6 +1,8 @@
 import './style.css'
 import { supabase } from './supabase'
 import { mountTasks } from './tasks'
+import { mountCourses } from './courses'
+import { mountUsers } from './users'
 
 const app = document.querySelector('#app')
 const $ = (id) => document.getElementById(id)
@@ -54,7 +56,7 @@ function showAuth() {
         const { error: pErr } = await supabase
           .from('profiles').insert({ display_name: $('name').value.trim() })
         if (pErr) return msg(pErr.message)
-        shownFor = null // force a redraw now that the profile exists
+        shownFor = null
         render(data.session)
       }
     } finally {
@@ -64,13 +66,24 @@ function showAuth() {
 }
 
 async function showApp(user) {
-  const { data: profile } = await supabase
-    .from('profiles').select('display_name').eq('user_id', user.id).maybeSingle()
+  const [{ data: profile }, { data: adminRow }, { data: grants }] = await Promise.all([
+    supabase.from('profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
+    supabase.from('admins').select('user_id,is_super').eq('user_id', user.id).maybeSingle(),
+    // filter by user: admins can read everyone's grants
+    supabase.from('task_editors').select('course_id').eq('user_id', user.id),
+  ])
   const name = profile?.display_name ?? ''
+  const isAdmin = !!adminRow
+  const isSuper = !!adminRow?.is_super
+  const perms = {
+    all: isAdmin || (grants ?? []).some((g) => g.course_id === null),
+    courses: new Set((grants ?? []).map((g) => g.course_id).filter(Boolean)),
+  }
+
   app.innerHTML = `
     <header class="top">
       <div>
-        <p class="hello">Welcome back</p>
+        <p class="hello" id="hello"></p>
         <h1 id="hi"></h1>
       </div>
       <div class="top-actions">
@@ -78,17 +91,40 @@ async function showApp(user) {
         <button id="logout" class="ghost">Log out</button>
       </div>
     </header>
-    <div id="tasks"></div>`
+    <nav class="tabs nav">
+      <button type="button" id="nav-tasks" class="tab">Tasks</button>
+      <button type="button" id="nav-courses" class="tab active">Courses</button>
+      ${isAdmin ? '<button type="button" id="nav-users" class="tab">Users</button>' : ''}
+    </nav>
+    <div id="view"></div>`
+  $('hello').textContent = isSuper ? 'Welcome back · Super admin' : isAdmin ? 'Welcome back · Admin' : 'Welcome back'
   $('hi').textContent = name
   $('avatar').textContent = (name[0] ?? '?').toUpperCase()
   $('logout').onclick = () => supabase.auth.signOut()
-  mountTasks(user)
+
+  const go = (view) => {
+    $('nav-tasks').classList.toggle('active', view === 'tasks')
+    $('nav-courses').classList.toggle('active', view === 'courses')
+    $('nav-users')?.classList.toggle('active', view === 'users')
+    if (view === 'tasks') {
+      $('view').innerHTML = '<div id="tasks"></div>'
+      mountTasks(user, perms)
+    } else if (view === 'users') {
+      mountUsers(user, isSuper)
+    } else {
+      mountCourses(user, isAdmin)
+    }
+  }
+  $('nav-tasks').onclick = () => go('tasks')
+  $('nav-courses').onclick = () => go('courses')
+  if (isAdmin) $('nav-users').onclick = () => go('users')
+  go('courses')
 }
 
 let shownFor = null
 async function render(session) {
   const id = session?.user.id ?? null
-  if (id && id === shownFor) return // already showing this user: don't wipe the screen
+  if (id && id === shownFor) return
   shownFor = id
   session ? await showApp(session.user) : showAuth()
 }

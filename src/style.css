@@ -132,3 +132,38 @@ details.add[open] summary { border-bottom: 1px solid var(--line); }
 .chip { position: relative; cursor: pointer; user-select: none; }
 .chip input { position: absolute; opacity: 0; pointer-events: none; }
 .chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav { margin-bottom: 8px; }
+.courses { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.courses li {
+  display: flex; align-items: center; gap: 12px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow);
+}
+.courses .info { flex: 1; min-width: 0; }
+.courses .code { font-size: .75rem; font-weight: 700; color: var(--accent-text); }
+.courses .cname { overflow-wrap: anywhere; }
+.courses button { flex: none; padding: 8px 14px; }
+.courses button.on { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+#list .body { cursor: pointer; flex: 1; }
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--text); padding: 0; width: min(92vw, 440px); box-shadow: var(--shadow); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.dlg-body { display: grid; gap: 10px; padding: 20px; }
+.dlg-body h3 { margin: 0; }
+.dlg-desc { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.dlg-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: .9rem; }
+.dlg-meta dt { color: var(--muted); }
+.dlg-meta dd { margin: 0; }
+.dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+button.danger { background: var(--danger); color: #fff; }
+#list .body { cursor: pointer; flex: 1; }
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--text); padding: 0; width: min(92vw, 440px); max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.dlg-body { display: grid; gap: 10px; padding: 20px; }
+.dlg-body h3 { margin: 0; }
+.dlg-body h2 { margin: 12px 0 0; }
+.dlg-desc { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.dlg-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: .9rem; }
+.dlg-meta dt { color: var(--muted); }
+.dlg-meta dd { margin: 0; }
+.dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+button.danger { background: var(--danger); color: #fff; }
+.nav { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
