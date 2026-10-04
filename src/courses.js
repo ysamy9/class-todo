@@ -1,10 +1,24 @@
 import { supabase } from './supabase'
+import { openCourse } from './schedule'
 
 const $ = (id) => document.getElementById(id)
 
-export async function mountCourses(user, isAdmin) {
+// ctx = { me, isAdmin, isSuper, can(courseId) }
+export async function mountCourses(user, ctx) {
   $('view').innerHTML = `
     <h2>Courses</h2>
+    ${ctx.isSuper ? `
+    <details class="add" id="cadd">
+      <summary>+ New course</summary>
+      <form id="add">
+        <div class="row">
+          <input id="ccode" placeholder="Code (e.g. WAVES)" required maxlength="20" />
+          <input id="cname" placeholder="Course name" required maxlength="100" />
+        </div>
+        <p class="msg" id="cmsg"></p>
+        <button id="cbtn">Add course</button>
+      </form>
+    </details>` : ''}
     <input id="q" placeholder="Search by code or name..." />
     <ul class="courses" id="clist"></ul>
     <p class="empty" id="cempty" hidden></p>`
@@ -13,6 +27,7 @@ export async function mountCourses(user, isAdmin) {
   let mine = new Set()
 
   async function load() {
+    if (!$('clist')) return
     const [c, e] = await Promise.all([
       supabase.from('courses').select('id,code,name').order('code'),
       supabase.from('enrollments').select('course_id'),
@@ -47,7 +62,10 @@ export async function mountCourses(user, isAdmin) {
       name.textContent = c.name
       const info = document.createElement('div')
       info.className = 'info'
+      info.style.cursor = 'pointer'
+      info.title = 'Timetable and details'
       info.append(code, name)
+      info.onclick = () => openCourse(ctx, c, load) // timetable + (super admin) rename/delete
 
       const btn = document.createElement('button')
       const on = mine.has(c.id)
@@ -62,6 +80,26 @@ export async function mountCourses(user, isAdmin) {
 
     $('cempty').hidden = shown.length > 0
     $('cempty').textContent = courses.length ? 'No course matches your search.' : 'No courses yet.'
+  }
+
+  if (ctx.isSuper) {
+    $('add').onsubmit = async (e) => {
+      e.preventDefault()
+      $('cmsg').textContent = ''
+      $('cbtn').disabled = true
+      const { error } = await supabase.from('courses').insert({
+        code: $('ccode').value.trim().toUpperCase(),
+        name: $('cname').value.trim(),
+      })
+      $('cbtn').disabled = false
+      if (error) {
+        $('cmsg').textContent = error.code === '23505' ? 'That course code already exists.' : error.message
+        return
+      }
+      e.target.reset()
+      $('cadd').open = false
+      load()
+    }
   }
 
   $('q').oninput = render
