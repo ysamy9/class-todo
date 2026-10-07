@@ -177,4 +177,3 @@ async function render(session) {
 supabase.auth.onAuthStateChange((_event, session) => {
   setTimeout(() => render(session), 0)
 })
-}
