@@ -18,7 +18,7 @@ function showAuth() {
     <div class="auth">
       <div class="auth-logo">✓</div>
       <h1>Class To-Do</h1>
-      <p class="sub">SCU Eng Companion App </p>
+      <p class="sub">SCU Eng Companion App... </pi>
       <div class="tabs">
         <button type="button" id="tab-login" class="tab active">Log in</button>
         <button type="button" id="tab-signup" class="tab">Sign up</button>
