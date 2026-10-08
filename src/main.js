@@ -19,7 +19,7 @@ function showAuth() {
   app.innerHTML = `
     <div class="auth">
       <div class="auth-logo">✓</div>
-      <h1>Class To-Do</h1>
+      <h1>Tasks and schedule manager</h1>
       <p class="sub">SCU Eng Companion App Everything in one place </p>
       <div class="tabs">
         <button type="button" id="tab-login" class="tab active">Log in</button>
