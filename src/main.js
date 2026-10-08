@@ -5,8 +5,10 @@ import { mountCourses } from './courses'
 import { mountUsers } from './users'
 import { mountTimetable } from './timetable'
 import { registerSW, pushState, enablePush, disablePush, syncPush, forgetDevice } from './push'
+import { watchForUpdates } from './update'
 
 registerSW()
+watchForUpdates()
 
 const app = document.querySelector('#app')
 const $ = (id) => document.getElementById(id)
