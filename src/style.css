@@ -185,3 +185,5 @@ button.danger { background: var(--danger); color: #fff; }
    .badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 8px; margin: 4px 4px 0 0; border-radius: 99px; background: var(--accent-soft); color: var(--accent-text); }
    .badge.warn { background: transparent; color: var(--warn); border: 1px solid var(--warn); }
    .badge.bad { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+   .update-bar { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow); font-weight: 600; }
+.update-bar button { background: var(--on-accent); color: var(--accent); padding: 6px 14px; }
